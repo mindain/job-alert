@@ -1,0 +1,5 @@
+.env
+__pycache__/
+_to_delete/
+data/raw_*.csv
+data/meta_*.json
