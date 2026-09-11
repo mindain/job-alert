@@ -11,6 +11,8 @@ collect_alio.py (공공데이터포털 잡알리오 API 수집: 공공기관 채
 3. `python run_all.py`
 
 ## 자동 실행
+**2026-09-11 기록**: GitHub Actions(미국 서버)에서는 공공데이터포털이 해외 IP를 차단해 수집 단계가 시간 초과로 실패했고, 실패 알림 메일은 정상 발송됨. 스케줄을 로컬 PC(Windows 작업 스케줄러 → `run_daily.bat`, 매일 08:00)로 옮겨 복구. 사람인 API 승인 후에는 GitHub Actions 재사용 가능.
+
 `.github/workflows/daily.yml` 이 매일 08:00(KST)에 실행. 저장소 Secrets에 `.env`와 같은 4개 값을 등록해야 한다. 실패하면 `send_mail.py --fail` 로 점검 로그가 메일로 온다.
 
 ## 검증
