@@ -34,7 +34,12 @@ def main():
 
     results = []
     # 1. 원본과 대조
-    results.append(("API 총건수 == 저장 건수", meta["api_total"] == len(raw), f"api={meta['api_total']} saved={len(raw)}"))
+    if "fetched" in meta:   # 잡알리오: 요청한 만큼 받았는지 + 저장 건수가 meta와 같은지
+        ok = meta["fetched"] == meta["expected_fetched"] and meta["saved"] == len(raw)
+        results.append(("API 응답 건수 == 요청 건수, 저장 건수 == 파일 행 수", ok,
+                        f"fetched={meta['fetched']}/{meta['expected_fetched']} saved={meta['saved']} rows={len(raw)}"))
+    else:                    # 사람인: API total == 저장 건수
+        results.append(("API 총건수 == 저장 건수", meta["api_total"] == len(raw), f"api={meta['api_total']} saved={len(raw)}"))
     # 2. 필수 칸
     missing = [r["id"] for r in raw if not all(r.get(k) for k in ("id", "company", "title", "url"))]
     results.append(("필수 칸 결측 없음", not missing, f"결측 {len(missing)}건 {missing[:5]}"))

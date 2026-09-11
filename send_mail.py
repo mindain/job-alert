@@ -58,7 +58,7 @@ def main():
         return
     with open(BASE / "data" / "jobs_master.csv", encoding="utf-8-sig") as f:
         rows = [r for r in csv.DictReader(f) if r.get("collected_at") == today]
-    send(f"[job-alert] {today} 데이터 분석 신입 공고 {len(rows)}건", build_html(rows))
+    send(f"[job-alert] {today} 공공기관 서울·신입 지원 가능 공고 {len(rows)}건", build_html(rows))
 
 
 if __name__ == "__main__":

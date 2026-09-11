@@ -1,6 +1,6 @@
 # 6단계: 매일 아침 8시(한국) 자동 실행 + 실패 시 메일
 # GitHub 저장소 Settings > Secrets and variables > Actions 에 아래 4개를 등록해야 한다.
-#   SARAMIN_ACCESS_KEY, GMAIL_USER, GMAIL_APP_PASSWORD, MAIL_TO
+#   ALIO_API_KEY, GMAIL_USER, GMAIL_APP_PASSWORD, MAIL_TO  (SARAMIN_ACCESS_KEY 는 승인 후 추가)
 name: daily-job-alert
 
 on:
@@ -15,6 +15,7 @@ jobs:
   run:
     runs-on: ubuntu-latest
     env:
+      ALIO_API_KEY: ${{ secrets.ALIO_API_KEY }}
       SARAMIN_ACCESS_KEY: ${{ secrets.SARAMIN_ACCESS_KEY }}
       GMAIL_USER: ${{ secrets.GMAIL_USER }}
       GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
@@ -29,6 +30,10 @@ jobs:
 
       - name: 수집 → 적재 → 점검 → 정리 → 메일
         run: python run_all.py
+
+      - name: 주간 리포트 (월요일만)
+        run: |
+          if [ "$(date +%u)" = "1" ]; then python weekly_report.py --send; else echo "월요일 아님, 건너뜀"; fi
 
       - name: 실패 알림 메일
         if: failure()

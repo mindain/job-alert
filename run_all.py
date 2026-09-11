@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 BASE = Path(__file__).parent
-STEPS = ["collect.py", "load.py", "check.py", "extract.py", "send_mail.py"]
+STEPS = ["collect_alio.py", "load.py", "check.py", "extract.py", "send_mail.py"]
 
 for step in STEPS:
     print(f"\n===== {step} =====")
