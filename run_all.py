@@ -1,18 +1,9 @@
-"""
-전체 실행: 수집 → 적재 → 점검 → 정리 → 메일. 점검이 실패하면 거기서 멈춘다.
-실행:  python run_all.py
-"""
-import subprocess
-import sys
+"""수집 → 점검 → 판단 → 발송. 점검 실패 시 멈추고 실패 알림."""
+import subprocess, sys
 from pathlib import Path
-
 BASE = Path(__file__).parent
-STEPS = ["collect_alio.py", "load.py", "check.py", "extract.py", "send_mail.py"]
-
-for step in STEPS:
+for step in ["collect_alio.py", "check.py", "judge.py", "send_mail.py"]:
     print(f"\n===== {step} =====")
-    r = subprocess.run([sys.executable, str(BASE / step)])
-    if r.returncode != 0:
-        print(f"[중단] {step} 실패 (종료 코드 {r.returncode})")
-        sys.exit(r.returncode)
-print("\n[완료] 전체 단계 통과")
+    if subprocess.run([sys.executable, str(BASE / step)]).returncode != 0:
+        print(f"[중단] {step} 실패"); subprocess.run([sys.executable, str(BASE / "send_mail.py"), "--fail"]); sys.exit(1)
+print("\n[완료]")

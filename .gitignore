@@ -1,5 +1,12 @@
 .env
+token.json
+credentials.json
 __pycache__/
 _to_delete/
-data/raw_*.csv
-data/meta_*.json
+data/
+logs/
+raw.csv
+meta.json
+judged.csv
+saved.json
+recent.json

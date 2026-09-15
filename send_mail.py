@@ -1,65 +1,62 @@
-"""
-5단계 (2/2): 이메일 발송
-오늘 새로 쌓인 공고를 항목별 표로 만들어 Gmail로 보낸다.
-실행:  python send_mail.py            (오늘 새 공고 메일)
-       python send_mail.py --fail     (파이프라인 실패 알림, 6단계에서 사용)
-.env:  GMAIL_USER=보내는 지메일, GMAIL_APP_PASSWORD=앱 비밀번호(16자리), MAIL_TO=받는 주소
-"""
-import csv
-import os
-import smtplib
-import sys
+"""4단계 정리·발송: 추천 / 그 외 / 자격 미달(기관명) + 보관함(마감까지 매일 표시). --fail 이면 실패 알림."""
+import csv, os, smtplib, sys
 from datetime import date
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
 from pathlib import Path
-
 from dotenv import load_dotenv
-
-BASE = Path(__file__).parent
-load_dotenv(BASE / ".env")
+import saved
+BASE = Path(__file__).parent; load_dotenv(BASE / ".env")
 USER, PW, TO = os.getenv("GMAIL_USER"), os.getenv("GMAIL_APP_PASSWORD"), os.getenv("MAIL_TO")
-COLS = ["company", "title", "신입가능", "학력요건", "졸업예정가능", "요구스킬", "고용형태", "expiration_date", "url"]
-HEAD = ["회사", "공고", "신입", "학력", "졸업예정", "요구스킬", "고용형태", "마감", "링크"]
+SAVE = os.getenv("SAVE_URL", "")
 
+def link(jid):
+    return f' <a href="{SAVE.replace("{id}", jid)}">[보관함에 넣기]</a>' if SAVE else ""
 
-def send(subject, html):
-    if not (USER and PW and TO):
-        sys.exit("오류: .env에 GMAIL_USER, GMAIL_APP_PASSWORD, MAIL_TO 가 필요합니다.")
-    msg = MIMEText(html, "html", "utf-8")
-    msg["Subject"], msg["From"], msg["To"] = subject, USER, TO
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
-        s.login(USER, PW)
-        s.sendmail(USER, [TO], msg.as_string())
-    print(f"[메일] 발송 완료: {subject}")
+def send(subject, html, files=()):
+    if not (USER and PW and TO): sys.exit("오류: .env에 GMAIL_USER, GMAIL_APP_PASSWORD, MAIL_TO 필요")
+    m = MIMEMultipart(); m["Subject"], m["From"], m["To"] = subject, USER, TO
+    m.attach(MIMEText(html, "html", "utf-8"))
+    for content, name in files:
+        part = MIMEBase("text", "calendar", method="PUBLISH", name=name); part.set_payload(content.encode("utf-8"))
+        encoders.encode_base64(part); part.add_header("Content-Disposition", "attachment", filename=name); m.attach(part)
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s: s.login(USER, PW); s.sendmail(USER, [TO], m.as_string())
+    print(f"[메일] 발송: {subject} (첨부 {len(files)})")
 
-
-def build_html(rows):
-    if not rows:
-        return "<p>오늘 새로 뜬 공고가 없습니다.</p>"
-    th = "".join(f"<th style='border:1px solid #ccc;padding:4px'>{h}</th>" for h in HEAD)
-    trs = []
-    for r in rows:
-        tds = []
-        for c in COLS:
-            v = r.get(c, "")
-            if c == "url":
-                v = f"<a href='{v}'>보기</a>"
-            tds.append(f"<td style='border:1px solid #ccc;padding:4px'>{v}</td>")
-        trs.append("<tr>" + "".join(tds) + "</tr>")
-    return f"<p>오늘 새 공고 {len(rows)}건</p><table style='border-collapse:collapse;font-size:13px'><tr>{th}</tr>{''.join(trs)}</table>"
-
+def d(s): return saved.fmt(s)
+def line(r):
+    return (f'<p style="margin:10px 0"><b>{r["company"]}</b> · {r["title"]}<br>'
+            f'<span style="color:#555;font-size:13px">{r["ncs"]} · {r["job_type"]} · {r["education"]} · 마감 {d(r["end_date"])} · '
+            f'<a href="{r["url"]}">[원문]</a>{link(r["id"])}</span><br>'
+            f'<span style="color:#b85450">▸ {r["reason"]}</span></p>')
 
 def main():
-    today = str(date.today())
+    today = date.today()
     if "--fail" in sys.argv:
         log = BASE / "logs" / f"check_{today}.txt"
-        body = log.read_text(encoding="utf-8") if log.exists() else "점검 로그 없음 (수집 단계에서 실패했을 수 있음)"
-        send(f"[job-alert] {today} 실행 실패", f"<pre>{body}</pre>")
-        return
-    with open(BASE / "data" / "jobs_master.csv", encoding="utf-8-sig") as f:
-        rows = [r for r in csv.DictReader(f) if r.get("collected_at") == today]
-    send(f"[job-alert] {today} 공공기관 서울·신입 지원 가능 공고 {len(rows)}건", build_html(rows))
+        send(f"[job-alert] {today} 실행 실패", f"<pre>{log.read_text(encoding='utf-8') if log.exists() else '점검 로그 없음'}</pre>"); return
+    rows = list(csv.DictReader(open(BASE / "judged.csv", encoding="utf-8-sig")))
+    ok = [r for r in rows if r["eligible"] == "True"]; rec = [r for r in ok if r["recommend"] == "True"]; etc = [r for r in ok if r["recommend"] != "True"]
+    out = [r for r in rows if r["eligible"] != "True"]
+    body = [f'<p>어제 새로 올라온 신입 가능 · 학력무관/대졸(4년) 공고 {len(rows)}건 중 자격 미달 {len(out)}건을 뺀 {len(ok)}건입니다. '
+            f'<span style="color:#777;font-size:12px">(지역·경력·학력 조건은 API 요청에서 적용)</span></p>']
+    body.append(f"<h3>추천 ({len(rec)})</h3>" + ("".join(line(r) for r in rec) or "<p>없음</p>"))
+    body.append(f"<h3>그 외 ({len(etc)})</h3>" + ("".join(line(r) for r in etc) or "<p>없음</p>"))
+    if out: body.append(f'<p style="color:#777;font-size:13px"><b>자격 미달 제외 ({len(out)})</b> ' + " · ".join(f'{r["company"]}({r["reason"]})' for r in out) + "</p>")
+    # 보관함: 오늘 목록 + 이전에 보관된 공고(saved.json)에서 번호를 찾음
+    jobs = {r["id"]: r for r in rows}; jobs.update({k: v for k, v in saved.load_store().items()})
+    store = saved.sync(jobs)
+    active = sorted(store.values(), key=lambda v: v.get("end_date") or "9")
+    files = []
+    if active:
+        body.append(f"<hr><h3>보관함 ({len(active)})</h3>")
+        for v in active:
+            d0 = saved.dday(v.get("end_date", ""))
+            body.append(f'<p style="margin:8px 0"><b>{v["company"]}</b> · {v["title"]}<br>'
+                        f'<span style="color:#555;font-size:13px">{v.get("ncs","")} · {v.get("job_type","")} · {v.get("education","")} · '
+                        f'접수 마감 {saved.fmt(v.get("end_date",""))}{f" (D-{d0})" if d0 is not None else ""} · <a href="{v["url"]}">[원문]</a></span></p>')
+    send(f"[job-alert] {today.month}/{today.day} 공공기관 신입 공고 · 추천 {len(rec)} · 그 외 {len(etc)} · 미달 {len(out)} · 보관함 {len(active)}", "\n".join(body), files)
 
-
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()

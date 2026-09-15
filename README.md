@@ -1,20 +1,20 @@
-# job-alert
+# job-alert · 공공기관 채용공고 자동 알림
 
-공공기관(잡알리오)·민간(사람인) 채용공고 중 서울·신입 지원 가능 공고를 매일 아침 8시에 자동 수집해, 신입 가능 여부·학력 요건·요구 스킬 등 항목별로 정리한 표를 이메일로 보내고 누적 저장하는 파이프라인.
+매일 아침 8시, 어제 새로 올라온 공공기관 채용공고 중 조건(신입 가능 · 학력무관/대졸(4년))에 맞는 것을 받아,
+Claude가 자격요건을 읽고 자격 미달은 걸러내고 나머지를 추천 / 그 외로 나눠 이메일로 보낸다.
+메일의 [보관함에 넣기]를 누르면 그 공고가 접수 마감까지 매일 메일 하단에 따라온다.
 
 ## 흐름
-collect_alio.py (공공데이터포털 잡알리오 API 수집: 공공기관 채용공시, 자격요건·우대사항 본문 포함) 또는 collect.py (사람인 API, 승인 후) → load.py (공고 번호 기준 중복 없이 누적) → check.py (원본 대조·결측·중복·마감 점검, 실패 시 중단) → extract.py (항목 정리 + xlsx) → send_mail.py (Gmail 발송)
+collect_alio.py 수집(잡알리오 API, 채용구분별 2회 요청, 시작일이 어제인 것만)
+→ check.py 점검(응답 정상 · 공고번호/URL 존재 · 마감일 형식, 실패 시 중단 + 실패 메일)
+→ judge.py 판단(claude -p 에 자격요건·우대사항 + profile.txt 를 넘겨 자격 여부·추천 여부·이유)
+→ send_mail.py 정리·발송(추천 / 그 외 / 자격 미달 기관명 + 보관함) · saved.py 보관함(Apps Script 웹앱 → Google Sheet)
 
-## 로컬 실행
-1. `.env.example`을 `.env`로 복사해 값 채우기
-2. `pip install -r requirements.txt`
-3. `python run_all.py`
+## 실행
+1. `.env`: ALIO_API_KEY, GMAIL_USER, GMAIL_APP_PASSWORD, MAIL_TO, SAVE_URL(웹앱 주소, `?id={id}`)
+2. `pip install -r requirements.txt`, Claude Code 설치 + 로그인
+3. `python run_all.py` · 자동 실행은 Windows 작업 스케줄러 → run_daily.bat (매일 08:00)
 
-## 자동 실행
-**2026-09-11 기록**: GitHub Actions(미국 서버)에서는 공공데이터포털이 해외 IP를 차단해 수집 단계가 시간 초과로 실패했고, 실패 알림 메일은 정상 발송됨. 스케줄을 로컬 PC(Windows 작업 스케줄러 → `run_daily.bat`, 매일 08:00)로 옮겨 복구. 사람인 API 승인 후에는 GitHub Actions 재사용 가능.
-
-`.github/workflows/daily.yml` 이 매일 08:00(KST)에 실행. 저장소 Secrets에 `.env`와 같은 4개 값을 등록해야 한다. 실패하면 `send_mail.py --fail` 로 점검 로그가 메일로 온다.
-
-## 검증
-- 매 실행 `logs/check_날짜.txt` 에 점검 결과가 남는다.
-- `졸업예정가능` 항목은 규칙 추정이므로 30건을 손으로 대조해 정확도를 기록한다.
+## 확인한 것
+- 잡알리오 API: 학력 조건(acbgCondLst)은 OR, 채용구분(recrutSe)은 한 값만, 날짜 파라미터는 동작하지 않음(어제 지정 시 0건) → 스크립트에서 처리
+- GitHub Actions(해외 IP)는 공공데이터포털이 차단 → 실패 알림 확인 후 로컬 스케줄러로 이전
